@@ -92,6 +92,10 @@ Other options:
 - `--rebuild` regenerates the page from the saved history without checking mail.
 - `--rescan` forgets the history and re-reads every matching email from scratch.
 - `--config /path/to/file.json` uses a different settings file.
+- `--list-folders` connects and prints every IMAP folder's full name and hierarchy delimiter.
+  Use this if you want fail2ban's emails to go to a subfolder instead of `INBOX` — set
+  `Imap.Folder` to the exact name printed here (the delimiter between parts varies by
+  mail server, e.g. `/` or `.`).
 
 ## 6. Schedule it with cron
 
