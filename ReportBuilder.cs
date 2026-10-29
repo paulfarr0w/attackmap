@@ -304,7 +304,7 @@ public static class ReportBuilder
     </section>
   </div>
 
-  <footer>Built from fail2ban ban notifications<span id="foot-updated"></span>__ATTRIBUTION__ · <a href="https://github.com/paulfarr0w/attackmap" target="_blank" rel="noopener">Want a map like this for your own server? Get AttackMap on GitHub</a></footer>
+  <footer>Built from fail2ban ban notifications<span id="foot-updated"></span>__ATTRIBUTION__ · Want a map like this for your own server? Get <a href="https://github.com/paulfarr0w/attackmap" target="_blank" rel="noopener">AttackMap</a> on GitHub</footer>
 </div>
 
 <dialog id="country-modal">
