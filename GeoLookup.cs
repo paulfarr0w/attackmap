@@ -1,3 +1,4 @@
+using MaxMind.Db;
 using MaxMind.GeoIP2;
 
 namespace AttackMap;
@@ -17,7 +18,13 @@ public sealed class GeoLookup : IDisposable
         if (!File.Exists(databasePath))
             throw new FileNotFoundException(
                 $"GeoIP database not found: {databasePath}. See README for where to download a free one.");
-        _reader = new DatabaseReader(databasePath);
+
+        // Each run is one short-lived process, so there's nothing to gain from the default
+        // MemoryMapped mode's cross-process sharing. It also relies on a named OS-level sync
+        // object under /tmp that a locked-down service account may not be able to open
+        // ("The system cannot open the device or file specified"). Loading the (small,
+        // country-level) database straight into managed memory avoids that entirely.
+        _reader = new DatabaseReader(databasePath, FileAccessMode.Memory);
     }
 
     public CountryInfo Lookup(string ip)
