@@ -17,6 +17,9 @@ public sealed class AppConfig
     /// <summary>The HTML page to write, normally inside your web server's public folder.</summary>
     public string OutputFile { get; set; } = "attackmap.html";
 
+    /// <summary>Unix permissions for the output file, e.g. 640 for rw-r-----. Ignored on Windows.</summary>
+    public int OutputFileMode { get; set; } = 640;
+
     public string Title { get; set; } = "Who is attacking my server";
 
     /// <summary>How many rows to show in the "top attacking IPs" table.</summary>
