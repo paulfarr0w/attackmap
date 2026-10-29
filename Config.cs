@@ -25,6 +25,9 @@ public sealed class AppConfig
     /// <summary>How many countries to show as bars (the rest are listed in the full table).</summary>
     public int TopCountryCount { get; set; } = 15;
 
+    /// <summary>How many IPs to list when you click a country on the map.</summary>
+    public int TopIpsPerCountry { get; set; } = 10;
+
     /// <summary>"light", "dark" or "auto" (follow the visitor's system setting).</summary>
     public string Theme { get; set; } = "light";
 

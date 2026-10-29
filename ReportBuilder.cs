@@ -50,6 +50,17 @@ public static class ReportBuilder
         DateOnly Day(DateTimeOffset t) => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(t, tz).DateTime);
         string Stamp(DateTimeOffset t) => TimeZoneInfo.ConvertTime(t, tz).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
+        // Shared by the global top-IPs table and each country's own top-IPs list (for the map click-through).
+        List<(string Ip, int Count, string Last, DateTimeOffset LastSort, string Jails)> GroupIps(IEnumerable<BanEvent> evts) =>
+            evts.GroupBy(e => e.Ip)
+                .Select(g =>
+                {
+                    var latest = g.MaxBy(e => e.Time)!;
+                    return (g.Key, g.Count(), Stamp(latest.Time), latest.Time,
+                        string.Join(", ", g.Select(e => e.Jail).Where(j => !string.IsNullOrEmpty(j)).Distinct().OrderBy(j => j)));
+                })
+                .ToList();
+
         var countries = events
             .GroupBy(e => e.CountryCode)
             .Select(g => new
@@ -58,6 +69,11 @@ public static class ReportBuilder
                 Name = g.OrderByDescending(e => e.Time).First().CountryName,
                 Count = g.Count(),
                 Ips = g.Select(e => e.Ip).Distinct().Count(),
+                TopIps = GroupIps(g)
+                    .OrderByDescending(x => x.Count).ThenByDescending(x => x.LastSort)
+                    .Take(Math.Max(1, config.TopIpsPerCountry))
+                    .Select(x => new { x.Ip, x.Count, x.Last })
+                    .ToList(),
             })
             .OrderByDescending(c => c.Count).ThenBy(c => c.Name)
             .ToList();
@@ -220,6 +236,15 @@ public static class ReportBuilder
   footer { color: var(--text-muted); font-size: 0.8rem; margin-top: 8px; }
   .jvm-tooltip { background: var(--text-primary); color: var(--surface-1); font: 13px/1.4 system-ui, sans-serif; padding: 5px 9px; border-radius: 6px; box-shadow: none; }
   .jvm-zoom-btn { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); }
+  dialog#country-modal {
+    border: none; border-radius: 10px; padding: 0; max-width: min(92vw, 480px); width: 100%;
+    background: var(--surface-1); color: var(--text-primary);
+  }
+  dialog#country-modal::backdrop { background: rgba(0, 0, 0, 0.5); }
+  .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+  .modal-head h3 { margin: 0; font-size: 1.05rem; }
+  .modal-head button { background: none; border: none; color: var(--text-secondary); font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 4px; }
+  .modal-body { padding: 10px 16px 16px; max-height: 60vh; overflow-y: auto; }
 </style>
 </head>
 <body>
@@ -281,6 +306,22 @@ public static class ReportBuilder
 
   <footer>Built from fail2ban ban notifications<span id="foot-updated"></span>__ATTRIBUTION__</footer>
 </div>
+
+<dialog id="country-modal">
+  <div class="modal-head">
+    <h3 id="modal-title"></h3>
+    <button type="button" id="modal-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <p class="note" id="modal-note"></p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th class="num">#</th><th>IP address</th><th class="num">Bans</th><th>Last banned</th></tr></thead>
+        <tbody id="modal-rows"></tbody>
+      </table>
+    </div>
+  </div>
+</dialog>
 
 <script type="application/json" id="report-data">__DATA__</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script>
@@ -353,7 +394,7 @@ public static class ReportBuilder
     swatch(v("--map-empty"), "none");
 
     if (typeof jsVectorMap === "undefined") { setText("map", "Map could not be loaded."); return; }
-    new jsVectorMap({
+    var map = new jsVectorMap({
       selector: "#map",
       map: "world",
       zoomButtons: true,
@@ -366,8 +407,47 @@ public static class ReportBuilder
       onRegionTooltipShow: function (event, tooltip, code) {
         var c = counts[code];
         tooltip.text((names[code] || tooltip.text()) + ": " + (c ? n(c) + (c === 1 ? " ban" : " bans") : "no bans"));
-      }
+      },
+      onRegionClick: function (event, code) { openCountryModal(code); }
     });
+
+    // jsVectorMap bakes its SVG size in at creation time and never re-reads the container,
+    // so rotating a phone (or any resize) needs an explicit nudge to redraw at the new size.
+    var resizeTimer;
+    function scheduleMapResize() {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () { map.updateSize(); }, 150);
+    }
+    window.addEventListener("resize", scheduleMapResize);
+    window.addEventListener("orientationchange", scheduleMapResize);
+
+    var modal = document.getElementById("country-modal");
+    var modalTitle = document.getElementById("modal-title");
+    var modalNote = document.getElementById("modal-note");
+    var modalRows = document.getElementById("modal-rows");
+    function openCountryModal(code) {
+      if (!modal || typeof modal.showModal !== "function") return;
+      var country = countries.find(function (c) { return c.code === code; });
+      modalTitle.textContent = country ? country.name : (names[code] || code);
+      modalRows.innerHTML = "";
+      var ips = country ? country.topIps : [];
+      if (!ips.length) {
+        modalNote.textContent = "No bans recorded for this country.";
+      } else {
+        modalNote.textContent = "Top " + ips.length + " attacking IP" + (ips.length === 1 ? "" : "s") + ".";
+        ips.forEach(function (r, i) {
+          var tr = document.createElement("tr");
+          cell(tr, String(i + 1), "num"); cell(tr, r.ip, "ip");
+          cell(tr, n(r.count), "num"); cell(tr, r.last);
+          modalRows.appendChild(tr);
+        });
+      }
+      modal.showModal();
+    }
+    if (modal) {
+      document.getElementById("modal-close").addEventListener("click", function () { modal.close(); });
+      modal.addEventListener("click", function (e) { if (e.target === modal) modal.close(); });
+    }
   })();
 
   if (typeof Chart === "undefined") return;
