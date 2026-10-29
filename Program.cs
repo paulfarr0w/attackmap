@@ -63,7 +63,7 @@ public static class Program
             }
 
             var html = ReportBuilder.Build(state, config, DateTimeOffset.Now);
-            WriteAtomically(config.OutputFile, html);
+            WriteAtomically(config.OutputFile, html, config.OutputFileMode);
             Log($"Wrote {config.OutputFile}");
             return 0;
         }
@@ -90,14 +90,30 @@ public static class Program
         }
     }
 
-    private static void WriteAtomically(string path, string contents)
+    private static void WriteAtomically(string path, string contents, int unixFileMode)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         // Same folder as the target, so the swap is an instant rename and visitors never see half a page.
         var temp = Path.Combine(Path.GetDirectoryName(path)!, "." + Path.GetFileName(path) + ".tmp");
         File.WriteAllText(temp, contents);
         if (!OperatingSystem.IsWindows())
-            File.SetUnixFileMode(temp, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            File.SetUnixFileMode(temp, ParseUnixFileMode(unixFileMode));
         File.Move(temp, path, overwrite: true);
+    }
+
+    /// <summary>Reads a permission setting the usual chmod way, e.g. 640 for rw-r-----.</summary>
+    private static UnixFileMode ParseUnixFileMode(int mode)
+    {
+        UnixFileMode result = 0;
+        if ((mode / 100 % 10 & 4) != 0) result |= UnixFileMode.UserRead;
+        if ((mode / 100 % 10 & 2) != 0) result |= UnixFileMode.UserWrite;
+        if ((mode / 100 % 10 & 1) != 0) result |= UnixFileMode.UserExecute;
+        if ((mode / 10 % 10 & 4) != 0) result |= UnixFileMode.GroupRead;
+        if ((mode / 10 % 10 & 2) != 0) result |= UnixFileMode.GroupWrite;
+        if ((mode / 10 % 10 & 1) != 0) result |= UnixFileMode.GroupExecute;
+        if ((mode % 10 & 4) != 0) result |= UnixFileMode.OtherRead;
+        if ((mode % 10 & 2) != 0) result |= UnixFileMode.OtherWrite;
+        if ((mode % 10 & 1) != 0) result |= UnixFileMode.OtherExecute;
+        return result;
     }
 }
