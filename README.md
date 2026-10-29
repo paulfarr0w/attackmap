@@ -45,6 +45,17 @@ Either one works; the program reads both.
   download `GeoLite2-Country.mmdb`. MaxMind's `geoipupdate` tool can keep it current
   automatically.
 
+If you went with DB-IP Lite, `update-geoip.sh` automates the monthly download: it fetches
+the current month's file (falling back to last month's if this month's isn't out yet),
+checks the download is a real database before using it, and saves it to
+`/opt/attackmap/dbip-country-lite.mmdb`. Copy it to `/opt/attackmap`, make it executable
+(`chmod +x update-geoip.sh`), and schedule it in cron, e.g. once a month on the 3rd
+(giving DB-IP a couple of days to publish that month's file):
+
+```
+15 4 3 * * /opt/attackmap/update-geoip.sh >> $HOME/update-geoip.log 2>&1
+```
+
 ## 4. Configure
 
 ```bash
@@ -144,6 +155,7 @@ patterns are at the top of `Fail2BanParser.cs`. After changing them, run with `-
 | `GeoLookup.cs` | IP-to-country lookup |
 | `StateStore.cs` | Saves and loads the all-time history |
 | `ReportBuilder.cs` | Builds the HTML page |
+| `update-geoip.sh` | Monthly cron script to refresh the DB-IP Lite database |
 
 The page loads Chart.js and jsvectormap from the jsDelivr CDN, with integrity hashes so a
 tampered copy would be refused.
