@@ -11,6 +11,8 @@ is in, and writes a static web page with:
 It keeps an all-time history in a small JSON file, so each run only reads new emails and
 never changes or deletes anything in the mailbox.
 
+![AttackMap report showing a world map shaded by ban count, summary stats, top countries, and a bans-over-time chart](docs/screenshot.png)
+
 ## 1. Install .NET 10
 
 .NET 10 is the current long-term support release (supported until November 2028).
