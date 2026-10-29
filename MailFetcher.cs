@@ -12,6 +12,28 @@ public sealed record FetchStats(int Matched, int New, int Bans, int Skipped);
 /// <summary>Reads new fail2ban emails over IMAP and adds their bans to the history. Never changes the mailbox.</summary>
 public static class MailFetcher
 {
+    /// <summary>Connects and prints every folder's full name and hierarchy delimiter, to help set Imap.Folder correctly.</summary>
+    public static void ListFolders(AppConfig config, Action<string> log)
+    {
+        var s = config.Imap;
+        using var client = new ImapClient();
+        if (s.AcceptInvalidCertificate)
+            client.ServerCertificateValidationCallback = (_, _, _, _) => true;
+
+        var security = Enum.TryParse<SecureSocketOptions>(s.Security, ignoreCase: true, out var opt)
+            ? opt
+            : throw new InvalidOperationException($"Imap.Security '{s.Security}' is not one of: Auto, SslOnConnect, StartTls, StartTlsWhenAvailable, None.");
+
+        client.Connect(s.Host, s.Port, security);
+        client.Authenticate(s.Username, s.Password);
+
+        foreach (var ns in client.PersonalNamespaces)
+            foreach (var folder in client.GetFolders(ns))
+                log($"{folder.FullName}  (delimiter: '{folder.DirectorySeparator}')");
+
+        client.Disconnect(true);
+    }
+
     public static FetchStats FetchNewBans(AppConfig config, AppState state, GeoLookup geo, Action<string> log)
     {
         var s = config.Imap;

@@ -5,17 +5,18 @@ public static class Program
     private const string Usage = """
         attackmap - turns fail2ban ban emails into a web page of who is attacking you.
 
-        Usage: attackmap [--config <file>] [--rebuild] [--rescan]
+        Usage: attackmap [--config <file>] [--rebuild] [--rescan] [--list-folders]
 
           --config <file>  Settings file (default: appsettings.json next to the program)
           --rebuild        Don't check mail; just regenerate the page from the saved history
           --rescan         Forget the saved history and re-read every matching email from scratch
+          --list-folders   Connect and print every IMAP folder's full name, to help set Imap.Folder
         """;
 
     public static int Main(string[] args)
     {
         string? configPath = null;
-        bool rebuildOnly = false, rescan = false;
+        bool rebuildOnly = false, rescan = false, listFolders = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -24,6 +25,7 @@ public static class Program
                 case "--config" when i + 1 < args.Length: configPath = args[++i]; break;
                 case "--rebuild": rebuildOnly = true; break;
                 case "--rescan": rescan = true; break;
+                case "--list-folders": listFolders = true; break;
                 case "-h" or "--help": Console.WriteLine(Usage); return 0;
                 default: Console.Error.WriteLine($"Unknown option: {args[i]}\n\n{Usage}"); return 2;
             }
@@ -34,6 +36,12 @@ public static class Program
         try
         {
             var config = AppConfig.Load(configPath);
+
+            if (listFolders)
+            {
+                MailFetcher.ListFolders(config, Log);
+                return 0;
+            }
 
             // Stop two cron runs overlapping if a mail server is slow.
             using var lockFile = TryLock(config.StateFile + ".lock");
