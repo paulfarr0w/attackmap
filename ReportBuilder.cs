@@ -229,6 +229,8 @@ public static class ReportBuilder
   th { color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.ip { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .ip-lookup { border: 0; padding: 0; background: none; color: inherit; font: inherit; text-decoration: underline dotted; cursor: help; }
+  #ip-tooltip { position: fixed; z-index: 10; max-width: min(320px, calc(100vw - 16px)); padding: 8px 10px; border-radius: 6px; background: var(--text-primary); color: var(--surface-1); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); font: 13px/1.45 system-ui, sans-serif; white-space: pre-line; pointer-events: none; }
   td.wrap-cell { white-space: normal; min-width: 200px; color: var(--text-secondary); }
   details summary { cursor: pointer; font-weight: 600; }
   details[open] summary { margin-bottom: 10px; }
@@ -322,6 +324,7 @@ public static class ReportBuilder
     </div>
   </div>
 </dialog>
+<div id="ip-tooltip" role="tooltip" hidden></div>
 
 <script type="application/json" id="report-data">__DATA__</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.6.1/dist/chart.umd.min.js" integrity="sha384-Emf5ZVIUiarAdhkgtqK+5/Z5qIvM6QoVrS+qAVtfyZVuD5lIHrac0me485+Antp0" crossorigin="anonymous"></script>
@@ -340,6 +343,59 @@ public static class ReportBuilder
 
   var s = data.summary;
   setText("foot-updated", " · updated " + data.generated);
+
+  var ipTooltip = document.getElementById("ip-tooltip");
+  var ipLookups = Object.create(null);
+  var activeIpLookup = 0;
+  var activeIpAnchor = null;
+  function positionIpTooltip() {
+    if (!activeIpAnchor || ipTooltip.hidden) return;
+    var rect = activeIpAnchor.getBoundingClientRect();
+    var left = Math.max(8, Math.min(rect.left, window.innerWidth - ipTooltip.offsetWidth - 8));
+    var top = rect.bottom + 6;
+    if (top + ipTooltip.offsetHeight > window.innerHeight - 8)
+      top = Math.max(8, rect.top - ipTooltip.offsetHeight - 6);
+    ipTooltip.style.left = left + "px";
+    ipTooltip.style.top = top + "px";
+  }
+  function lookupIpOwner(ip) {
+    if (!ipLookups[ip]) {
+      ipLookups[ip] = fetch("https://ipwho.is/" + encodeURIComponent(ip), { credentials: "omit" })
+        .then(function (response) {
+          if (!response.ok) throw new Error("Ownership lookup failed");
+          return response.json();
+        })
+        .then(function (result) {
+          if (!result.success) return "No ownership information available.";
+          var connection = result.connection || {};
+          var lines = [];
+          if (connection.org) lines.push("Organization: " + connection.org);
+          if (connection.isp && connection.isp !== connection.org) lines.push("ISP: " + connection.isp);
+          if (connection.asn) lines.push("ASN: " + connection.asn);
+          if (!lines.length && connection.domain) lines.push("Domain: " + connection.domain);
+          return lines.length ? lines.join("\n") : "No ownership information available.";
+        })
+        .catch(function () { return "Ownership lookup unavailable."; });
+    }
+    return ipLookups[ip];
+  }
+  function showIpOwner(ip, anchor) {
+    var lookupId = ++activeIpLookup;
+    activeIpAnchor = anchor;
+    ipTooltip.textContent = "Looking up owner for " + ip + "…";
+    ipTooltip.hidden = false;
+    positionIpTooltip();
+    lookupIpOwner(ip).then(function (owner) {
+      if (lookupId !== activeIpLookup) return;
+      ipTooltip.textContent = ip + "\n" + owner;
+      positionIpTooltip();
+    });
+  }
+  function hideIpOwner() {
+    activeIpLookup++;
+    activeIpAnchor = null;
+    ipTooltip.hidden = true;
+  }
 
   if (!s.total) {
     setText("subtitle", "No bans recorded yet.");
@@ -520,7 +576,20 @@ public static class ReportBuilder
   var ipRows = document.getElementById("ip-rows");
   data.topIps.forEach(function (r, i) {
     var tr = document.createElement("tr");
-    cell(tr, String(i + 1), "num"); cell(tr, r.ip, "ip"); cell(tr, r.name);
+    cell(tr, String(i + 1), "num");
+    var ipCell = cell(tr, "", "ip");
+    var ipButton = document.createElement("button");
+    ipButton.type = "button";
+    ipButton.className = "ip-lookup";
+    ipButton.textContent = r.ip;
+    ipButton.setAttribute("aria-describedby", "ip-tooltip");
+    ipButton.setAttribute("aria-label", "Show network owner for " + r.ip);
+    ipButton.addEventListener("pointerenter", function () { showIpOwner(r.ip, ipButton); });
+    ipButton.addEventListener("pointerleave", hideIpOwner);
+    ipButton.addEventListener("focus", function () { showIpOwner(r.ip, ipButton); });
+    ipButton.addEventListener("blur", hideIpOwner);
+    ipCell.appendChild(ipButton);
+    cell(tr, r.name);
     cell(tr, n(r.count), "num"); cell(tr, r.last); cell(tr, r.jails, "wrap-cell");
     ipRows.appendChild(tr);
   });
