@@ -356,6 +356,33 @@ public static class ReportBuilder
 
   var countries = data.countries;
   var known = countries.filter(function (c) { return c.code !== "??"; });
+  var modal = document.getElementById("country-modal");
+  var modalTitle = document.getElementById("modal-title");
+  var modalNote = document.getElementById("modal-note");
+  var modalRows = document.getElementById("modal-rows");
+  function openCountryModal(code) {
+    if (!modal || typeof modal.showModal !== "function") return;
+    var country = countries.find(function (c) { return c.code === code; });
+    modalTitle.textContent = country ? country.name : code;
+    modalRows.innerHTML = "";
+    var ips = country ? country.topIps : [];
+    if (!ips.length) {
+      modalNote.textContent = "No bans recorded for this country.";
+    } else {
+      modalNote.textContent = "Top " + ips.length + " attacking IP" + (ips.length === 1 ? "" : "s") + ".";
+      ips.forEach(function (r, i) {
+        var tr = document.createElement("tr");
+        cell(tr, String(i + 1), "num"); cell(tr, r.ip, "ip");
+        cell(tr, n(r.count), "num"); cell(tr, r.last);
+        modalRows.appendChild(tr);
+      });
+    }
+    modal.showModal();
+  }
+  if (modal) {
+    document.getElementById("modal-close").addEventListener("click", function () { modal.close(); });
+    modal.addEventListener("click", function (e) { if (e.target === modal) modal.close(); });
+  }
 
   // ---- Map: classed choropleth, single blue ramp, light -> dark with magnitude ----
   (function () {
@@ -420,34 +447,6 @@ public static class ReportBuilder
     }
     window.addEventListener("resize", scheduleMapResize);
     window.addEventListener("orientationchange", scheduleMapResize);
-
-    var modal = document.getElementById("country-modal");
-    var modalTitle = document.getElementById("modal-title");
-    var modalNote = document.getElementById("modal-note");
-    var modalRows = document.getElementById("modal-rows");
-    function openCountryModal(code) {
-      if (!modal || typeof modal.showModal !== "function") return;
-      var country = countries.find(function (c) { return c.code === code; });
-      modalTitle.textContent = country ? country.name : (names[code] || code);
-      modalRows.innerHTML = "";
-      var ips = country ? country.topIps : [];
-      if (!ips.length) {
-        modalNote.textContent = "No bans recorded for this country.";
-      } else {
-        modalNote.textContent = "Top " + ips.length + " attacking IP" + (ips.length === 1 ? "" : "s") + ".";
-        ips.forEach(function (r, i) {
-          var tr = document.createElement("tr");
-          cell(tr, String(i + 1), "num"); cell(tr, r.ip, "ip");
-          cell(tr, n(r.count), "num"); cell(tr, r.last);
-          modalRows.appendChild(tr);
-        });
-      }
-      modal.showModal();
-    }
-    if (modal) {
-      document.getElementById("modal-close").addEventListener("click", function () { modal.close(); });
-      modal.addEventListener("click", function (e) { if (e.target === modal) modal.close(); });
-    }
   })();
 
   if (typeof Chart === "undefined") return;
@@ -462,9 +461,9 @@ public static class ReportBuilder
   (function () {
     var top = countries.slice(0, data.topCountryCount);
     var rest = countries.length - top.length;
-    setText("bar-note", rest > 0
+    setText("bar-note", (rest > 0
       ? "Top " + top.length + " of " + countries.length + " countries. The full list is in “All countries” below."
-      : "All " + countries.length + " countries by number of bans.");
+      : "All " + countries.length + " countries by number of bans.") + " Click a bar to see its top attacking IPs.");
     document.getElementById("bar-box").style.height = (top.length * 28 + 40) + "px";
     new Chart(document.getElementById("bar"), {
       type: "bar",
@@ -475,6 +474,9 @@ public static class ReportBuilder
       },
       options: {
         indexAxis: "y", maintainAspectRatio: false, animation: false,
+        onClick: function (event, elements) {
+          if (elements.length) openCountryModal(top[elements[0].index].code);
+        },
         plugins: { legend: { display: false }, tooltip: Object.assign({}, tooltipStyle, {
           callbacks: { label: function (ctx) { return n(ctx.parsed.x) + " bans · " + n(top[ctx.dataIndex].ips) + " IPs"; } } }) },
         scales: {
