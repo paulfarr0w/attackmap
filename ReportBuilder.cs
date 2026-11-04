@@ -237,7 +237,9 @@ public static class ReportBuilder
   .jvm-tooltip { background: var(--text-primary); color: var(--surface-1); font: 13px/1.4 system-ui, sans-serif; padding: 5px 9px; border-radius: 6px; box-shadow: none; }
   .jvm-zoom-btn { background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border); }
   dialog#country-modal {
+    position: fixed; z-index: 1000; top: 50%; left: 50%; transform: translate(-50%, -50%); margin: 0;
     border: none; border-radius: 10px; padding: 0; max-width: min(92vw, 480px); width: 100%;
+    max-height: 80vh;
     background: var(--surface-1); color: var(--text-primary);
   }
   dialog#country-modal::backdrop { background: rgba(0, 0, 0, 0.5); }
