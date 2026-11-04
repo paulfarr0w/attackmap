@@ -8,6 +8,9 @@ is in, and writes a static web page with:
 - a chart of bans over time (daily, switching to weekly once you have 4+ months of history)
 - a table of the top attacking IP addresses, plus a full country table
 
+Hovering over or focusing an IP in the top-address table looks up its network owner via
+ipwho.is. The address is sent to that service only when you hover over or focus it.
+
 It keeps an all-time history in a small JSON file, so each run only reads new emails and
 never changes or deletes anything in the mailbox.
 
